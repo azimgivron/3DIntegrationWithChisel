@@ -222,8 +222,8 @@ class CSR(implicit val p: Parameters) extends Module with CoreParams {
   io.expt := io.illegal || iaddrInvalid || laddrInvalid || saddrInvalid ||
              io.cmd(1, 0).orR && (!csrValid || !privValid) || wen && csrRO || 
              (privInst && !privValid) || isEcall || isEbreak
-  io.evec := mtvec + (PRV << 6)
-  io.epc  := mepc
+  io.evec := mtvec + (PRV << 6) //exception handler base address
+  io.epc  := mepc //exception program counter
 
   // Counters
   time := time + 1.U

@@ -67,11 +67,11 @@ object Control {
   import Instructions._
   import ALU._
 
-  val default =
-    //                                                            kill                        wb_en  illegal?
-    //            pc_sel  A_sel   B_sel  imm_sel   alu_op   br_type |  st_type ld_type wb_sel  | csr_cmd |
-    //              |       |       |     |          |          |   |     |       |       |    |  |      |
-             List(PC_4,   A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, Y)
+    //                                                              kill                        wb_en  illegal?
+    //              pc_sel  A_sel   B_sel  imm_sel   alu_op   br_type |  st_type ld_type wb_sel  | csr_cmd |
+    //                |       |       |     |          |          |   |     |       |       |    |  |      |
+  val default = List(PC_4,   A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, Y)
+  
   val map = Array(
     LUI   -> List(PC_4  , A_PC,   B_IMM, IMM_U, ALU_COPY_B, BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N),
     AUIPC -> List(PC_4  , A_PC,   B_IMM, IMM_U, ALU_ADD   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N),
@@ -144,6 +144,8 @@ class ControlSignals(implicit p: Parameters) extends CoreBundle()(p) {
 class Control(implicit p: Parameters) extends Module {
   val io = IO(new ControlSignals)
   val ctrlSignals = ListLookup(io.inst, Control.default, Control.map)
+  //ctrlSignals is value(Control.map) where key(control.map)==io.instr
+  //if no match is found Control.default is assigned
 
   // Control signals for Fetch
   io.pc_sel    := ctrlSignals(0)

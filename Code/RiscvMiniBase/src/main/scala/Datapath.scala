@@ -39,24 +39,32 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   val csr_in  = Reg(UInt())
 
   /****** Control signals *****/
-  val st_type  = Reg(io.ctrl.st_type.cloneType)
-  val ld_type  = Reg(io.ctrl.ld_type.cloneType)
-  val wb_sel   = Reg(io.ctrl.wb_sel.cloneType)
+  val st_type  = Reg(io.ctrl.st_type.cloneType)	//UInt 2bits long
+  val ld_type  = Reg(io.ctrl.ld_type.cloneType)	//UInt 3bits long
+  val wb_sel   = Reg(io.ctrl.wb_sel.cloneType)	//UInt 2bits long
   val wb_en    = Reg(Bool())
-  val csr_cmd  = Reg(io.ctrl.csr_cmd.cloneType)
+  val csr_cmd  = Reg(io.ctrl.csr_cmd.cloneType)	//UInt 3bits long
   val illegal  = Reg(Bool())
   val pc_check = Reg(Bool())
  
   /****** Fetch *****/
-  val started = RegNext(reset.toBool)
-  val stall = !io.icache.resp.valid || !io.dcache.resp.valid
-  val pc   = RegInit(Const.PC_START.U(xlen.W) - 4.U(xlen.W))
+  val started = RegNext(reset.toBool) //reg initialized to 1bit reset signal 
+  val stall = !io.icache.resp.valid || !io.dcache.resp.valid //none of the valid signal of the caches are high
+  val pc   = RegInit(Const.PC_START.U(xlen.W) - 4.U(xlen.W)) //PC = PC_START.toUIntOn(xlen_Bits) - 4 <= why -4 ?
   val npc  = Mux(stall, pc, Mux(csr.io.expt, csr.io.evec,
              Mux(io.ctrl.pc_sel === PC_EPC,  csr.io.epc,
-             Mux(io.ctrl.pc_sel === PC_ALU || brCond.io.taken, alu.io.sum >> 1.U << 1.U,
+             Mux(io.ctrl.pc_sel === PC_ALU || brCond.io.taken, alu.io.sum >> 1.U << 1.U, //sum >> 1bit << 1bit => least significant bit is 0
              Mux(io.ctrl.pc_sel === PC_0, pc, pc + 4.U)))))
-  val inst = Mux(started || io.ctrl.inst_kill || brCond.io.taken || csr.io.expt, Instructions.NOP, io.icache.resp.bits.data)
-  pc                      := npc 
+  //if stall, npc = pc
+  //else if exception (csr.io.expt), npc = csr.io.evec <= exception handler base address
+  //else if PC is PC_EPC, npc == csr.io.epc <= exception program counter
+  //else if PC is PC_ALU or BranchPredictor says it is a taken branch, npc = alu.io.sum (with the last bit put to 0 => even number)
+  //else if PC is PC_0, npc = pc
+  //else ncp = pc + 4bits //should be 4bytes -> 32bits isn't it ?
+
+  val inst = Mux(started || io.ctrl.inst_kill || brCond.io.taken || csr.io.expt, Instructions.NOP, io.icache.resp.bits.data) 
+  //the instruction to execute if there is one, NOP otherwise
+  pc                      := npc //update pc to the new instaruction address
   io.icache.req.bits.addr := npc
   io.icache.req.bits.data := 0.U
   io.icache.req.bits.mask := 0.U
@@ -74,10 +82,13 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   io.ctrl.inst  := fe_inst
 
   // regFile read
-  val rd_addr  = fe_inst(11, 7)
-  val rs1_addr = fe_inst(19, 15)
+  // Addressing in RISCV R-type 32bits instructions :
+  // 31->25 funct7, 24->20 source register2, 19->15 source register1, 14->12 funct3, 11->7 destination register, 6->0 opcode (bounds included) 
+  val rd_addr  = fe_inst(11, 7) 
+  val rs1_addr = fe_inst(19, 15) 
   val rs2_addr = fe_inst(24, 20)
-  regFile.io.raddr1 := rs1_addr
+  //put operand addresses in regFile so the regFile outputs the corresponding operands rs1 and rs2
+  regFile.io.raddr1 := rs1_addr 
   regFile.io.raddr2 := rs2_addr
 
   // gen immdeates
@@ -86,8 +97,11 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
 
   // bypass
   val wb_rd_addr = ew_inst(11, 7)
+  // we read data directly from the alu if wb_en, the address of the data is not the reg0 and
+  // the data address correspond to the destination register of the previous computation
   val rs1hazard = wb_en && rs1_addr.orR && (rs1_addr === wb_rd_addr)
   val rs2hazard = wb_en && rs2_addr.orR && (rs2_addr === wb_rd_addr)
+  // operand might either be in the register ew_alu or in one of the register of the regFile
   val rs1 = Mux(wb_sel === WB_ALU && rs1hazard, ew_alu, regFile.io.rdata1) 
   val rs2 = Mux(wb_sel === WB_ALU && rs2hazard, ew_alu, regFile.io.rdata2)
  
@@ -165,7 +179,7 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   regFile.io.waddr := wb_rd_addr
   regFile.io.wdata := regWrite
 
-  // Abort store when there's an excpetion
+  // Abort store when there's an exception
   io.dcache.abort := csr.io.expt
 
   if (p(Trace)) {
