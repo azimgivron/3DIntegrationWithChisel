@@ -26,6 +26,7 @@ class ALUIo(implicit p: Parameters) extends CoreBundle()(p) {
   val A = Input(UInt(xlen.W)) //first operand
   val B = Input(UInt(xlen.W)) //second operand
   val alu_op = Input(UInt(4.W)) //operation
+  val to_dispatcher = Output(false.B)
   val out = Output(UInt(xlen.W)) //output
   val sum = Output(UInt(xlen.W)) //sum of A and B
 }
@@ -34,6 +35,7 @@ import ALU._
 
 abstract class ALU(implicit val p: Parameters) extends Module with CoreParams {
   val io = IO(new ALUIo)
+  to_dispatcher := !to_dispatcher
 }
 
 class ALUSimple(implicit p: Parameters) extends ALU()(p) {
@@ -87,3 +89,5 @@ class ALUArea(implicit p: Parameters) extends ALU()(p) {
   io.out := out
   io.sum := sum
 }
+
+

@@ -19,12 +19,12 @@ class DatapathIO(implicit p: Parameters) extends CoreBundle()(p) {
 }
 
 class Datapath(implicit val p: Parameters) extends Module with CoreParams {
-  val io      = IO(new DatapathIO)
-  val csr     = Module(new CSR)
-  val regFile = Module(new RegFile) 
-  val alu     = p(BuildALU)(p)
-  val immGen  = p(BuildImmGen)(p)
-  val brCond  = p(BuildBrCond)(p)
+  val io   		= IO(new DatapathIO)
+  val csr  		= Module(new CSR)
+  val regFile 	= Module(new RegFile) 
+  val alu     	= p(BuildALU)(p)
+  val immGen  	= p(BuildImmGen)(p)
+  val brCond  	= p(BuildBrCond)(p)
 
   import Control._
 
@@ -50,12 +50,12 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   /****** Fetch *****/
   val started = RegNext(reset.toBool) //reg initialized to 1bit reset signal 
   val stall = !io.icache.resp.valid || !io.dcache.resp.valid //none of the valid signal of the caches are high
-  val pc   = RegInit(Const.PC_START.U(xlen.W) - 4.U(xlen.W)) //PC = PC_START.toUIntOn(xlen_Bits) - 4 <= why -4 ?
+  val pc   = RegInit(Const.PC_START.U(xlen.W) - 4.U(xlen.W)) //PC = PC_START.toUIntOn(xlen_Bits) - 4 => why -4
   val npc  = Mux(stall, pc, Mux(csr.io.expt, csr.io.evec,
              Mux(io.ctrl.pc_sel === PC_EPC,  csr.io.epc,
              Mux(io.ctrl.pc_sel === PC_ALU || brCond.io.taken, alu.io.sum >> 1.U << 1.U, //sum >> 1bit << 1bit => least significant bit is 0
              Mux(io.ctrl.pc_sel === PC_0, pc, pc + 4.U)))))
-  //if stall, npc = pc
+  //if stall, npc = pc => stalling implies redo the same instruction
   //else if exception (csr.io.expt), npc = csr.io.evec <= exception handler base address
   //else if PC is PC_EPC, npc == csr.io.epc <= exception program counter
   //else if PC is PC_ALU or BranchPredictor says it is a taken branch, npc = alu.io.sum (with the last bit put to 0 => even number)
@@ -95,7 +95,7 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   immGen.io.inst := fe_inst
   immGen.io.sel  := io.ctrl.imm_sel
 
-  // bypass
+  // bypass write back to data cache if input is the output of the ALU
   val wb_rd_addr = ew_inst(11, 7)
   // we read data directly from the alu if wb_en, the address of the data is not the reg0 and
   // the data address correspond to the destination register of the previous computation
@@ -116,8 +116,8 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   brCond.io.br_type := io.ctrl.br_type
 
   // D$ access
-  val daddr   = Mux(stall, ew_alu, alu.io.sum) >> 2.U << 2.U
-  val woffset = alu.io.sum(1) << 4.U | alu.io.sum(0) << 3.U
+  val daddr   = Mux(stall, ew_alu, alu.io.sum) >> 2.U << 2.U //last 2bits are zeros
+  val woffset = alu.io.sum(1) << 4.U | alu.io.sum(0) << 3.U //second least significant bit shifted left by 4 OR first least significant bit shifted left by 3
   io.dcache.req.valid     := !stall && (io.ctrl.st_type.orR || io.ctrl.ld_type.orR)
   io.dcache.req.bits.addr := daddr 
   io.dcache.req.bits.data := rs2 << woffset
