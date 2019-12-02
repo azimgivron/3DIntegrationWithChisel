@@ -19,14 +19,13 @@ object ALU { //15 different possible operations doable by the ALU encoded on 4bi
   val ALU_SRA    = "b1001".U(4.W)
   val ALU_COPY_A = "b1010".U(4.W)
   val ALU_COPY_B = "b1011".U(4.W)
-  val ALU_XXX    = "b1111".U(4.W) //no match 
+  val ALU_XXX    = "b1111".U(4.W) //no match => NOP?
 }
 
 class ALUIo(implicit p: Parameters) extends CoreBundle()(p) {
   val A = Input(UInt(xlen.W)) //first operand
   val B = Input(UInt(xlen.W)) //second operand
   val alu_op = Input(UInt(4.W)) //operation
-  val to_dispatcher = Output(Bool())
   val out = Output(UInt(xlen.W)) //output
   val sum = Output(UInt(xlen.W)) //sum of A and B
 }
@@ -35,9 +34,6 @@ import ALU._
 
 abstract class ALU(implicit val p: Parameters) extends Module with CoreParams {
   val io = IO(new ALUIo)
-  val to_dispatcher = RegInit(false.B)
-  to_dispatcher := !to_dispatcher
-  io.to_dispatcher := to_dispatcher
 }
 
 class ALUSimple(implicit p: Parameters) extends ALU()(p) {

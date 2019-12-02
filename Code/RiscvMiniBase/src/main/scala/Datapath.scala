@@ -23,8 +23,10 @@ class Datapath(implicit val p: Parameters) extends Module with CoreParams {
   val csr  		= Module(new CSR)
   val regFile 	= Module(new RegFile) 
   val alu     	= p(BuildALU)(p)
+  val dispatch 	= Module(new ALU_Dispatcher)
   val immGen  	= p(BuildImmGen)(p)
   val brCond  	= p(BuildBrCond)(p)
+
 
   import Control._
 
