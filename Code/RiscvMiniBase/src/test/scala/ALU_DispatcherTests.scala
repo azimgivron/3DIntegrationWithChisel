@@ -32,6 +32,14 @@ class ALU_Dispatcher_SW{
                                 output(4) = 0
                                 output(5) = 0
                                 this.alu1_busy = true
+                              }
+                              else{
+                                output(0) = 0
+                                output(1) = 0
+                                output(2) = 0
+                                output(3) = 0
+                                output(4) = 0
+                                output(5) = 0
                               } 
                               if(!this.alu2_busy || from_alu2){
                                 this.state = dispatch_alu2
@@ -48,13 +56,7 @@ class ALU_Dispatcher_SW{
                                 output(5) = alu_op
                                 this.alu2_busy = true
                               }
-                              if(!this.alu1_busy || from_alu1){
-                                this.state = dispatch_alu1
-                              } 
                               else{
-                                this.state = waitStatus
-                              } 
-      case `waitStatus` =>    if(this.alu1_busy && this.alu2_busy){
                                 output(0) = 0
                                 output(1) = 0
                                 output(2) = 0
@@ -62,6 +64,18 @@ class ALU_Dispatcher_SW{
                                 output(4) = 0
                                 output(5) = 0
                               }
+                              if(!this.alu1_busy || from_alu1){
+                                this.state = dispatch_alu1
+                              } 
+                              else{
+                                this.state = waitStatus
+                              } 
+      case `waitStatus` =>    output(0) = 0
+                              output(1) = 0
+                              output(2) = 0
+                              output(3) = 0
+                              output(4) = 0
+                              output(5) = 0
                               if(!this.alu1_busy || from_alu1){
                                 this.state = dispatch_alu1
                               } 
