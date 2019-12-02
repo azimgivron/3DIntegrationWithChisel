@@ -94,21 +94,13 @@ class ALU_Dispatcher(implicit val p: Parameters) extends Module with CoreParams 
 	    }
 	}
     .elsewhen(state === waitStatus) {
-    	when(alu1_busy && alu2_busy){
-			io.A_toALU1 := 0.U
-	    	io.B_toALU1 := 0.U
-	    	io.alu_op_toALU1 := 0.U
-			io.A_toALU2 := 0.U
-	    	io.B_toALU2 := 0.U
-	    	io.alu_op_toALU2 := 0.U
-		}.otherwise{
-			io.A_toALU1 := 0.U
-	    	io.B_toALU1 := 0.U
-	    	io.alu_op_toALU1 := 0.U
-			io.A_toALU2 := 0.U
-	    	io.B_toALU2 := 0.U
-	    	io.alu_op_toALU2 := 0.U
-		}
+		io.A_toALU1 := 0.U
+    	io.B_toALU1 := 0.U
+    	io.alu_op_toALU1 := 0.U
+		io.A_toALU2 := 0.U
+    	io.B_toALU2 := 0.U
+    	io.alu_op_toALU2 := 0.U
+		
 		when(!alu1_busy || io.from_alu1) {
 	    	state := dispatchToALU1
 	    }.elsewhen(!alu2_busy || io.from_alu2) {
