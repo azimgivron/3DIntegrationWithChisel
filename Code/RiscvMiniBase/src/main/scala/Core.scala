@@ -9,6 +9,7 @@ import freechips.rocketchip.config.{Parameters, Field}
 case object XLEN extends Field[Int]
 case object Trace extends Field[Boolean]
 case object BuildALU extends Field[Parameters => ALU]
+case object BuildDatapath extends Field[Parameters => Datapath]
 case object BuildImmGen extends Field[Parameters => ImmGen]
 case object BuildBrCond extends Field[Parameters => BrCond]
 
@@ -31,8 +32,8 @@ class CoreIO(implicit p: Parameters) extends CoreBundle()(p) {
 }
 
 class Core(implicit val p: Parameters) extends Module with CoreParams {
-  val io = IO(new CoreIO)
-  val dpath = Module(new Datapath) 
+  val io    = IO(new CoreIO)
+  val dpath = p(BuildDatapath)(p)
   val ctrl  = Module(new Control)
 
   io.host <> dpath.io.host

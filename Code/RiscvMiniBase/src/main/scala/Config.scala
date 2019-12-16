@@ -10,9 +10,10 @@ class MiniConfig extends Config((site, here, up) => {
     // Core
     case XLEN => 32
     case Trace => true
-    case BuildALU    => (p: Parameters) => Module(new ALUArea()(p))
-    case BuildImmGen => (p: Parameters) => Module(new ImmGenWire()(p))
-    case BuildBrCond => (p: Parameters) => Module(new BrCondArea()(p))
+    case BuildALU      => (p: Parameters) => Module(new ALUArea()(p))
+    case BuildDatapath => (p: Parameters) => Module(new SimpleDatapath()(p))
+    case BuildImmGen   => (p: Parameters) => Module(new ImmGenWire()(p))
+    case BuildBrCond   => (p: Parameters) => Module(new BrCondArea()(p))
     // Cache
     case NWays => 1 // TODO: set-associative
     case NSets => 256 
