@@ -204,11 +204,14 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
   val fe_pc   = Reg(UInt())
 
   /***** Execute / Write Back Registers *****/
-  val ew_inst 	= RegInit(Instructions.NOP) 
-  val ew_pc   	= Reg(UInt())
-  val ew_alu  	= Reg(UInt())
-  val ew_alu2 	= Reg(UInt())
-  val csr_in  	= Reg(UInt())
+  val ew_inst 			= RegInit(Instructions.NOP) 
+  val alu_done 			= RegInit(0.U(1.W))
+  val alu2_done			= RegInit(0.U(1.W))
+  val previousSelect 	= RegInit(false.B)
+  val ew_pc   			= Reg(UInt())
+  val ew_alu  			= Reg(UInt())
+  val ew_alu2 			= Reg(UInt())
+  val csr_in  			= Reg(UInt())
 
   /****** Control signals *****/
   val st_type  = Reg(io.ctrl.st_type.cloneType) //UInt 2bits long
@@ -270,21 +273,23 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
   val rs1hazard = wb_en && rs1_addr.orR && (rs1_addr === wb_rd_addr)
   val rs2hazard = wb_en && rs2_addr.orR && (rs2_addr === wb_rd_addr)
   // operand might either be in the register ew_alu or in one of the register of the regFile
-  val rs1 = Mux(wb_sel === WB_ALU && rs1hazard, ew_alu, regFile.io.rdata1) 
-  val rs2 = Mux(wb_sel === WB_ALU && rs2hazard, ew_alu, regFile.io.rdata2)
+  val rs1 = Mux(wb_sel === WB_ALU && rs1hazard, Mux(previousSelect, ew_alu2, ew_alu), regFile.io.rdata1) 
+  val rs2 = Mux(wb_sel === WB_ALU && rs2hazard, Mux(previousSelect, ew_alu2, ew_alu), regFile.io.rdata2)
  
   // ALU operations
   dispatcher.io.A       	:= Mux(io.ctrl.A_sel === A_RS1, rs1, fe_pc)
   dispatcher.io.B       	:= Mux(io.ctrl.B_sel === B_RS2, rs2, immGen.io.out)
   dispatcher.io.alu_op  	:= io.ctrl.alu_op
-  dispatcher.io.from_alu1 	:= alu.io.out(xlen,xlen-1)
-  dispatcher.io.from_alu2 	:= alu2.io.out(xlen,xlen-1)
+  dispatcher.io.from_alu1 	:= alu_done
+  dispatcher.io.from_alu2 	:= alu2_done
   alu.io.A              	:= dispatcher.io.A_toALU1
   alu.io.B              	:= dispatcher.io.B_toALU1
   alu.io.alu_op         	:= dispatcher.io.alu_op_toALU1
+  alu.io.flipped_bit		:= dispatcher.io.alu_flipped
   alu2.io.A             	:= dispatcher.io.A_toALU2
   alu2.io.B             	:= dispatcher.io.B_toALU2
   alu2.io.alu_op        	:= dispatcher.io.alu_op_toALU2
+  alu2.io.flipped_bit		:= dispatcher.io.alu2_flipped
 
 
   // Branch condition calc
@@ -293,9 +298,10 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
   brCond.io.br_type := io.ctrl.br_type
 
   // D$ access
-  val daddr   = Mux(stall, ew_alu, 
+  val daddr   = Mux(stall, 
+  				Mux(previousSelect, ew_alu2, ew_alu), 
                 Mux(dispatcher.io.select, alu2.io.sum, alu.io.sum)) >> 2.U << 2.U
-  val woffset = Mux(dispatcher.io.select, alu.io.sum(1) << 4.U | alu.io.sum(0) << 3.U, alu2.io.sum(1) << 4.U | alu2.io.sum(0) << 3.U)
+  val woffset = Mux(dispatcher.io.select, alu2.io.sum(1) << 4.U | alu2.io.sum(0) << 3.U, alu.io.sum(1) << 4.U | alu.io.sum(0) << 3.U)
   io.dcache.req.valid     := !stall && (io.ctrl.st_type.orR || io.ctrl.ld_type.orR)
   io.dcache.req.bits.addr := daddr 
   io.dcache.req.bits.data := rs2 << woffset
@@ -319,6 +325,9 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
     ew_inst   := fe_inst
     ew_alu    := alu.io.out(xlen-1,0)
     ew_alu2   := alu2.io.out(xlen-1,0)
+    alu_done  := alu.io.out(xlen,xlen-1)
+  	alu2_done := alu2.io.out(xlen,xlen-1)
+  	previousSelect := dispatcher.io.select
     csr_in    := Mux(io.ctrl.imm_sel === IMM_Z, immGen.io.out, rs1)
     st_type   := io.ctrl.st_type
     ld_type   := io.ctrl.ld_type
@@ -330,7 +339,7 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
   }
 
   // Load
-  val loffset = Mux(dispatcher.io.select, ew_alu(1) << 4.U | ew_alu(0) << 3.U, ew_alu2(1) << 4.U | ew_alu2(0) << 3.U)
+  val loffset = Mux(previousSelect, ew_alu2(1) << 4.U | ew_alu2(0) << 3.U, ew_alu(1) << 4.U | ew_alu(0) << 3.U)
 
   val lshift  = io.dcache.resp.bits.data >> loffset
   val load    = MuxLookup(ld_type, io.dcache.resp.bits.data.zext, Seq(
@@ -343,7 +352,7 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
   csr.io.cmd      := csr_cmd
   csr.io.inst     := ew_inst
   csr.io.pc       := ew_pc
-  csr.io.addr     := ew_alu
+  csr.io.addr     := Mux(previousSelect, ew_alu2, ew_alu)
   csr.io.illegal  := illegal
   csr.io.pc_check := pc_check
   csr.io.ld_type  := ld_type
@@ -352,7 +361,7 @@ class DoubleAluDatapath(implicit p: Parameters) extends Datapath()(p) {
 
   // Regfile Write
   val regWrite =  MuxLookup(wb_sel, 
-                  Mux(dispatcher.io.select, ew_alu.zext, ew_alu2.zext), 
+                  Mux(previousSelect, ew_alu2.zext, ew_alu.zext), 
                   Seq(  WB_MEM -> load,
                         WB_PC4 -> (ew_pc + 4.U).zext,
                         WB_CSR -> csr.io.out.zext)).asUInt 

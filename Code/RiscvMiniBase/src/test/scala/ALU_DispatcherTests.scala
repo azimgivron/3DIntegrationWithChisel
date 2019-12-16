@@ -13,103 +13,85 @@ object State extends Enumeration {
 
 import State._
 
-class ALU_Dispatcher_SW{
+class ALU_Dispatcher_SW {
   var state: State = dispatch_alu1;
   var alu1_busy    = false;
   var alu2_busy    = false;
-  var alu1_done    = 1;
-  var alu2_done    = 1;
+  var alu1_done    = 0;
+  var alu2_done    = 0;
   var select       = 0;
 
-  def step(A: Int, B: Int, alu_op: Int, from_alu1: Boolean, from_alu2: Boolean): Array[Int]={
+  def step(A: Int, B: Int, alu_op: Int, from_alu1: Boolean, from_alu2: Boolean): Array[Int]= {
     //return a list containing A_toALU1, B_toALU1, alu_op_toALU1, A_toALU2, B_toALU2, alu_op_toALU2
     val output        = new Array[Int](9)
     val previousState = this.state
 
-    this.state match{
-      case `dispatch_alu1` => if(!this.alu1_busy){
-                                output(0) = A
-                                output(1) = B
-                                output(2) = alu_op
-                                output(3) = alu1_done
-                                output(4) = 0
-                                output(5) = 0
-                                output(6) = 0
-                                output(7) = alu2_done
-                                this.alu1_busy = true
-                              }else{
-                                output(0) = 0
-                                output(1) = 0
-                                output(2) = 0
-                                output(3) = alu1_done
-                                output(4) = 0
-                                output(5) = 0
-                                output(6) = 0
-                                output(7) = alu2_done
-                              } 
-                              if(!this.alu2_busy || ((alu2_done==1) != from_alu2)){
-                                this.state = dispatch_alu2
-                              }else{
-                                this.state = waitStatus
-                              }
-      case `dispatch_alu2` => if(!this.alu2_busy){
-                                output(0) = 0
-                                output(1) = 0
-                                output(2) = 0
-                                output(3) = alu1_done
-                                output(4) = A
-                                output(5) = B
-                                output(6) = alu_op
-                                output(7) = alu2_done
-                                this.alu2_busy = true
-                              }else{
-                                output(0) = 0
-                                output(1) = 0
-                                output(2) = 0
-                                output(3) = alu1_done
-                                output(4) = 0
-                                output(5) = 0
-                                output(6) = 0
-                                output(7) = alu2_done
-                              }
-                              if(!this.alu1_busy || ((alu1_done==1) != from_alu1)){
-                                this.state = dispatch_alu1
-                              }else{
-                                this.state = waitStatus
-                              } 
-      case `waitStatus` =>    output(0) = 0
-                              output(1) = 0
-                              output(2) = 0
-                              output(3) = alu1_done
-                              output(4) = 0
-                              output(5) = 0
-                              output(6) = 0
-                              output(7) = alu2_done
-                              if(!this.alu1_busy || ((alu1_done==1) != from_alu1)){
-                                this.state = dispatch_alu1
-                              }else if(!this.alu2_busy || ((alu2_done==1) != from_alu2)){
-                                this.state = dispatch_alu2
-                              }else{
-                                this.state = waitStatus
-                              }
-      case _ => 
-    }
+    if(this.state == dispatch_alu1 || (this.state == waitStatus && (this.alu1_done==1) != from_alu1)) {  
+      output(0) = A
+      output(1) = B
+      output(2) = alu_op
+      output(3) = alu1_done
+      output(4) = 0
+      output(5) = 0
+      output(6) = 0
+      output(7) = alu2_done
+      this.alu1_busy = true
+                          
+      this.state = if(!this.alu2_busy || ((alu2_done==1) != from_alu2)) dispatch_alu2 else waitStatus
+    }else if( this.state == dispatch_alu2 || (this.state == waitStatus && (this.alu2_done==1) != from_alu2)) {
+        output(0) = 0
+        output(1) = 0
+        output(2) = 0
+        output(3) = alu1_done
+        output(4) = A
+        output(5) = B
+        output(6) = alu_op
+        output(7) = alu2_done
+        this.alu2_busy = true
+        
+        this.state = if(!this.alu1_busy || ((alu1_done==1) != from_alu1)) dispatch_alu1 else waitStatus
 
-    output(8) = this.select
-    if(((alu2_done==1) != from_alu2) && (previousState!=dispatch_alu2)){
-      this.alu2_busy = false
-      this.alu2_done = if(from_alu2) 1 else 0
-      if((previousState==dispatch_alu2) || this.alu1_busy){
-        this.select = 0
+    }else {
+      output(0) = 0
+      output(1) = 0
+      output(2) = 0
+      output(3) = alu1_done
+      output(4) = 0
+      output(5) = 0
+      output(6) = 0
+      output(7) = alu2_done
+      
+      if(!this.alu1_busy){
+        this.state = dispatch_alu1
+      }else if(!this.alu2_busy){
+        this.state = dispatch_alu2
+      }else{
+        this.state = waitStatus
       }
     }
-    if(((alu1_done==1) != from_alu1) && (previousState!=dispatch_alu1)){
-      this.alu1_busy = false
+    val tmp_done = (this.alu1_done==1)
+    val tmp_busy = this.alu1_busy
+
+    if(((alu1_done==1) != from_alu1) && (previousState != dispatch_alu1)) {
       this.alu1_done = if(from_alu1) 1 else 0
-      if((previousState==dispatch_alu1) || this.alu2_busy){
+      if(previousState != waitStatus){
+        this.alu1_busy = false
+      }
+      if(this.alu2_busy || (previousState == dispatch_alu2)) {
         this.select = 1
       }
     }
+    if(((alu2_done==1) != from_alu2) && (previousState != dispatch_alu2)) {
+      this.alu2_done = if(from_alu2) 1 else 0
+      if(!((state == waitStatus) && (tmp_done == from_alu1))) {
+        this.alu2_busy = false
+      }
+      if(tmp_busy || (state == dispatch_alu1) || ((state == waitStatus) && (tmp_done != from_alu1))) {
+        this.select = 0
+      }
+    }
+    output(8) = this.select
+    
     return output
   }
 }
@@ -119,7 +101,7 @@ class ALU_DispatcherTester(c: => ALU_Dispatcher)(implicit p: freechips.rocketchi
   val xlen             = p(XLEN)
   val dispatcher_model = new ALU_Dispatcher_SW
 
-  val size             = 1000
+  val size             = 100
   val (cntr, done)     = Counter(true.B, size)
   val rs1              = Seq.fill(size)(rnd.nextInt(pow(2, xlen).intValue)) map toBigInt
   val rs2              = Seq.fill(size)(rnd.nextInt(pow(2, xlen).intValue)) map toBigInt
@@ -156,7 +138,7 @@ class ALU_DispatcherTester(c: => ALU_Dispatcher)(implicit p: freechips.rocketchi
   assert(dut.io.alu_op_toALU2 === alu_op_toALU2(cntr))
   assert(dut.io.alu2_flipped === alu2_flipped(cntr))
   assert(dut.io.select === select(cntr))
-  printf("Counter: %d, OP: %d, A: %d, B: %d, from_alu1: %d, from_alu2: %d\nOUT:\nhw ?= sw\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n",
+  printf("Counter: %d, OP: %d, A: %d, B: %d, from_alu1: %d, from_alu2: %d\nOUT:\nhw ?= sw\nA to alu1:%d %d\nB to alu1:%d %d\nOP to alu1:%d %d\nFlip bit to alu1:%d %d\nA to alu2:%d %d\nB to alu2:%d %d\nOP to alu2:%d %d\nFlip bit to alu2:%d %d\nSelect:%d %d\n",
          cntr, dut.io.alu_op, dut.io.A, dut.io.B, dut.io.from_alu1, dut.io.from_alu2, dut.io.A_toALU1, a_toALU1(cntr), dut.io.B_toALU1, 
          b_toALU1(cntr), dut.io.alu_op_toALU1, alu_op_toALU1(cntr), dut.io.alu_flipped, alu_flipped(cntr), dut.io.A_toALU2, a_toALU2(cntr),
          dut.io.B_toALU2, b_toALU2(cntr), dut.io.alu_op_toALU2, alu_op_toALU2(cntr), dut.io.alu2_flipped, alu2_flipped(cntr),
