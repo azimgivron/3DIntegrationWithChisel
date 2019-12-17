@@ -15,11 +15,11 @@ class DispatcherIo(implicit p: Parameters) extends CoreBundle()(p) {
   val A_toALU1 		= Output(UInt(xlen.W)) //first operand
   val B_toALU1 		= Output(UInt(xlen.W)) //second operand
   val alu_op_toALU1 = Output(UInt(4.W)) //operator
-  val alu_flipped 	= Output(UInt(1.W))
+  val alu_done 	 	= Output(UInt(1.W))
   val A_toALU2 		= Output(UInt(xlen.W)) //first operand
   val B_toALU2 		= Output(UInt(xlen.W)) //second operand
   val alu_op_toALU2 = Output(UInt(4.W)) //operator
-  val alu2_flipped 	= Output(UInt(1.W))
+  val alu2_done  	= Output(UInt(1.W))
   val select 		= Output(Bool()) //Tells which one of the ALUs contains the oldest result
   									 //with false designated the first one
 }
@@ -40,9 +40,8 @@ class ALU_Dispatcher(implicit val p: Parameters) extends Module with CoreParams 
 	io.select := select //one cycle latency
 
   	//free ALU
-  	when((alu_done =/= io.from_alu1) && (state =/= dispatchToALU1)) { 
+  	when((alu_done === io.from_alu1) && (state =/= dispatchToALU1)) { 
   	//You can only reach dispatchToALU1 if alu1_busy was already set to false
-  		alu_done := io.from_alu1
   		when(state =/= waitStatus) {
   			alu1_busy := false.B
   		}
@@ -52,57 +51,63 @@ class ALU_Dispatcher(implicit val p: Parameters) extends Module with CoreParams 
   		}
   	}
 
-  	when((alu2_done =/= io.from_alu2) && (state =/= dispatchToALU2)) {
+  	when((alu2_done === io.from_alu2) && (state =/= dispatchToALU2)) {
   	//Similarly you can only reach dispatchToALU2 if alu2_busy was already set to false
-  		alu2_done := io.from_alu2
-  		when(!((state === waitStatus) && (alu_done === io.from_alu1))) {
+  		when((state === waitStatus) && (alu_done === io.from_alu1)) {
   			alu2_busy := false.B
   		}
-  		when(alu1_busy || (state === dispatchToALU1) || (state === waitStatus && alu_done =/= io.from_alu1)) {
+  		when(alu1_busy || (state === dispatchToALU1) || (state === waitStatus && alu_done === io.from_alu1)) {
   			select := false.B
   			io.select := false.B
   		}
   	}
+
+  	//printf("alu_done: %d, alu2_done: %d, state: %d\n", alu_done, alu2_done, state)
 	//FSM
 	//match the current state and act in consequence
 	when((state === dispatchToALU1) ||
-	 (state === waitStatus && alu_done =/= io.from_alu1)) { //used when instead of switch because switch doesn't allow default case
+	 (state === waitStatus && alu_done === io.from_alu1)) { //used when instead of switch because switch doesn't allow default case
 		//assign outputs
     	io.A_toALU1 		:= io.A
     	io.B_toALU1			:= io.B
     	io.alu_op_toALU1	:= io.alu_op
-    	io.alu_flipped 		:= alu_done	
+    	io.alu_done 		:= ~alu_done
+
+    	alu_done 			:= ~alu_done
+
     	io.A_toALU2 		:= 0.U
     	io.B_toALU2 		:= 0.U
     	io.alu_op_toALU2 	:= 0.U
-    	io.alu2_flipped 	:= alu2_done	
+    	io.alu2_done  		:= alu2_done	
     	//change internal status to busy
 	  	alu1_busy 			:= true.B
     	//transition of state   
-    	state := Mux(!alu2_busy || (alu2_done =/= io.from_alu2), dispatchToALU2, waitStatus) 		
+    	state := Mux(!alu2_busy || (alu2_done === io.from_alu2), dispatchToALU2, waitStatus) 		
     }
-    .elsewhen((state === dispatchToALU2) || (state === waitStatus && alu2_done =/= io.from_alu2)) {
+    .elsewhen((state === dispatchToALU2) || (state === waitStatus && alu2_done === io.from_alu2)) {
 		io.A_toALU1 		:= 0.U
     	io.B_toALU1 		:= 0.U
     	io.alu_op_toALU1 	:= 0.U
-    	io.alu_flipped 		:= alu_done	
+    	io.alu_done 		:= alu_done	
 		io.A_toALU2 		:= io.A
     	io.B_toALU2 		:= io.B
     	io.alu_op_toALU2 	:= io.alu_op
-    	io.alu2_flipped 	:= alu2_done	
+    	io.alu2_done 	 	:= ~alu2_done
+
+    	alu2_done 			:= ~alu2_done	
 
     	alu2_busy 			:= true.B
-	    state := Mux(!alu1_busy || (alu_done =/= io.from_alu1), dispatchToALU1, waitStatus) 		
+	    state := Mux(!alu1_busy || (alu_done === io.from_alu1), dispatchToALU1, waitStatus) 		
 	}
     .otherwise{	
 		io.A_toALU1 		:= 0.U
 		io.B_toALU1 		:= 0.U
 		io.alu_op_toALU1 	:= 0.U
-		io.alu_flipped 		:= alu_done	
+		io.alu_done 		:= alu_done	
 		io.A_toALU2 		:= 0.U
 		io.B_toALU2 		:= 0.U
 		io.alu_op_toALU2 	:= 0.U
-		io.alu2_flipped 	:= alu2_done
+		io.alu2_done  		:= alu2_done
 		
 		state := Mux(!alu1_busy, dispatchToALU1, 
 			  	 Mux(!alu2_busy, dispatchToALU2,

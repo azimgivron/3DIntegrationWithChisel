@@ -25,41 +25,49 @@ class ALU_Dispatcher_SW {
     //return a list containing A_toALU1, B_toALU1, alu_op_toALU1, A_toALU2, B_toALU2, alu_op_toALU2
     val output        = new Array[Int](9)
     val previousState = this.state
+    val tmp_done = (this.alu1_done==1)
+    val tmp_done2 = (this.alu2_done==1)
 
-    if(this.state == dispatch_alu1 || (this.state == waitStatus && (this.alu1_done==1) != from_alu1)) {  
+
+    if(this.state == dispatch_alu1 || (this.state == waitStatus && (this.alu1_done==1) == from_alu1)) {  
       output(0) = A
       output(1) = B
       output(2) = alu_op
-      output(3) = alu1_done
+      output(3) = if(this.alu1_done==1) 0 else 1
+
+      this.alu1_done = if(this.alu1_done==1) 0 else 1
+
       output(4) = 0
       output(5) = 0
       output(6) = 0
-      output(7) = alu2_done
+      output(7) = this.alu2_done
       this.alu1_busy = true
                           
-      this.state = if(!this.alu2_busy || ((alu2_done==1) != from_alu2)) dispatch_alu2 else waitStatus
-    }else if( this.state == dispatch_alu2 || (this.state == waitStatus && (this.alu2_done==1) != from_alu2)) {
+      this.state = if(!this.alu2_busy || ((alu2_done==1) == from_alu2)) dispatch_alu2 else waitStatus
+    }else if( this.state == dispatch_alu2 || (this.state == waitStatus && (this.alu2_done==1) == from_alu2)) {
         output(0) = 0
         output(1) = 0
         output(2) = 0
-        output(3) = alu1_done
+        output(3) = this.alu1_done
         output(4) = A
         output(5) = B
         output(6) = alu_op
-        output(7) = alu2_done
+        output(7) = if(this.alu2_done==1) 0 else 1
+
+        this.alu2_done = if(this.alu2_done==1) 0 else 1
+
         this.alu2_busy = true
         
-        this.state = if(!this.alu1_busy || ((alu1_done==1) != from_alu1)) dispatch_alu1 else waitStatus
-
+        this.state = if(!this.alu1_busy || ((alu1_done==1) == from_alu1)) dispatch_alu1 else waitStatus
     }else {
       output(0) = 0
       output(1) = 0
       output(2) = 0
-      output(3) = alu1_done
+      output(3) = this.alu1_done
       output(4) = 0
       output(5) = 0
       output(6) = 0
-      output(7) = alu2_done
+      output(7) = this.alu2_done
       
       if(!this.alu1_busy){
         this.state = dispatch_alu1
@@ -69,11 +77,9 @@ class ALU_Dispatcher_SW {
         this.state = waitStatus
       }
     }
-    val tmp_done = (this.alu1_done==1)
     val tmp_busy = this.alu1_busy
 
-    if(((alu1_done==1) != from_alu1) && (previousState != dispatch_alu1)) {
-      this.alu1_done = if(from_alu1) 1 else 0
+    if((tmp_done == from_alu1) && (previousState != dispatch_alu1)) {
       if(previousState != waitStatus){
         this.alu1_busy = false
       }
@@ -81,17 +87,15 @@ class ALU_Dispatcher_SW {
         this.select = 1
       }
     }
-    if(((alu2_done==1) != from_alu2) && (previousState != dispatch_alu2)) {
-      this.alu2_done = if(from_alu2) 1 else 0
-      if(!((state == waitStatus) && (tmp_done == from_alu1))) {
+    if((tmp_done2 == from_alu2) && (previousState != dispatch_alu2)) {
+      if((state == waitStatus) && (tmp_done == from_alu1)) {
         this.alu2_busy = false
       }
-      if(tmp_busy || (state == dispatch_alu1) || ((state == waitStatus) && (tmp_done != from_alu1))) {
+      if(tmp_busy || (state == dispatch_alu1) || ((state == waitStatus) && (tmp_done == from_alu1))) {
         this.select = 0
       }
     }
-    output(8) = this.select
-    
+    output(8) = this.select    
     return output
   }
 }
@@ -101,7 +105,7 @@ class ALU_DispatcherTester(c: => ALU_Dispatcher)(implicit p: freechips.rocketchi
   val xlen             = p(XLEN)
   val dispatcher_model = new ALU_Dispatcher_SW
 
-  val size             = 100
+  val size             = 1000
   val (cntr, done)     = Counter(true.B, size)
   val rs1              = Seq.fill(size)(rnd.nextInt(pow(2, xlen).intValue)) map toBigInt
   val rs2              = Seq.fill(size)(rnd.nextInt(pow(2, xlen).intValue)) map toBigInt
@@ -114,11 +118,11 @@ class ALU_DispatcherTester(c: => ALU_Dispatcher)(implicit p: freechips.rocketchi
   val a_toALU1         = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => a.U})
   val b_toALU1         = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => b.U})
   val alu_op_toALU1    = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => c.U})
-  val alu_flipped      = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => d.U})
+  val alu_done         = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => d.U})
   val a_toALU2         = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => e.U})
   val b_toALU2         = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => f.U})
   val alu_op_toALU2    = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => g.U})
-  val alu2_flipped     = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => h.U})
+  val alu2_done        = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => h.U})
   val select           = VecInit(out map { case Array(a, b, c, d, e, f, g, h, i) => (i==1).B})
 
   dut.io.alu_op := VecInit(alu_op map (_.U))(cntr)
@@ -132,16 +136,16 @@ class ALU_DispatcherTester(c: => ALU_Dispatcher)(implicit p: freechips.rocketchi
   assert(dut.io.A_toALU1 === a_toALU1(cntr))
   assert(dut.io.B_toALU1 === b_toALU1(cntr))
   assert(dut.io.alu_op_toALU1 === alu_op_toALU1(cntr))
-  assert(dut.io.alu_flipped === alu_flipped(cntr))
+  assert(dut.io.alu_done === alu_done(cntr))
   assert(dut.io.A_toALU2 === a_toALU2(cntr))
   assert(dut.io.B_toALU2 === b_toALU2(cntr))
   assert(dut.io.alu_op_toALU2 === alu_op_toALU2(cntr))
-  assert(dut.io.alu2_flipped === alu2_flipped(cntr))
+  assert(dut.io.alu2_done === alu2_done(cntr))
   assert(dut.io.select === select(cntr))
   printf("Counter: %d, OP: %d, A: %d, B: %d, from_alu1: %d, from_alu2: %d\nOUT:\nhw ?= sw\nA to alu1:%d %d\nB to alu1:%d %d\nOP to alu1:%d %d\nFlip bit to alu1:%d %d\nA to alu2:%d %d\nB to alu2:%d %d\nOP to alu2:%d %d\nFlip bit to alu2:%d %d\nSelect:%d %d\n",
          cntr, dut.io.alu_op, dut.io.A, dut.io.B, dut.io.from_alu1, dut.io.from_alu2, dut.io.A_toALU1, a_toALU1(cntr), dut.io.B_toALU1, 
-         b_toALU1(cntr), dut.io.alu_op_toALU1, alu_op_toALU1(cntr), dut.io.alu_flipped, alu_flipped(cntr), dut.io.A_toALU2, a_toALU2(cntr),
-         dut.io.B_toALU2, b_toALU2(cntr), dut.io.alu_op_toALU2, alu_op_toALU2(cntr), dut.io.alu2_flipped, alu2_flipped(cntr),
+         b_toALU1(cntr), dut.io.alu_op_toALU1, alu_op_toALU1(cntr), dut.io.alu_done, alu_done(cntr), dut.io.A_toALU2, a_toALU2(cntr),
+         dut.io.B_toALU2, b_toALU2(cntr), dut.io.alu_op_toALU2, alu_op_toALU2(cntr), dut.io.alu2_done, alu2_done(cntr),
          dut.io.select, select(cntr)) 
 }
 
