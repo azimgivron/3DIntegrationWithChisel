@@ -18,9 +18,14 @@ It is developed as an intermediate example before diving into [rocket-chip](http
 
     $ git clone https://github.com/ucb-bar/riscv-mini.git
     $ cd riscv-mini
-    $ make            # generate firrtl & verilog files in generated-src
+    $ make            # generate firrtl & verilog files in ./generated-src
     
 The verilog output file can be used for verilator simulation or the ASIC tool flow.
+
+Alternative:
+    $ ./generate.sh 
+
+The command will generate the verilog files that correspond to different configurations under ./generated-src/verilog
     
 ## Running Verilator Simulation
 
